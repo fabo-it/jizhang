@@ -1,5 +1,5 @@
 // 离线缓存：只缓存 App 本身的文件，不会读取或上传任何记账数据
-const CACHE = 'jizhang-v3';
+const CACHE = 'jizhang-v4';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './maskable-512.png', './apple-touch-icon.png', './favicon-32.png'];
 
 self.addEventListener('install', e => {

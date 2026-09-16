@@ -162,6 +162,11 @@ input.cat-color::-webkit-color-swatch{border:none;border-radius:50%}
 input.cat-color::-moz-color-swatch{border:none;border-radius:50%}
 .delete-category{background:none;border:none;color:var(--ink3);cursor:pointer;font-size:1.1em;line-height:1;padding:0 2px}
 .delete-category:hover{color:#ef4444}
+.cat-name{background:none;border:none;padding:0 2px;font:inherit;color:inherit;cursor:pointer;border-radius:4px;display:inline-flex;align-items:center;gap:4px}
+.cat-name:hover{background:#e2e8f0}
+.cat-name .pen{font-size:.72em;opacity:0;transition:opacity .15s}
+.category-tag:hover .cat-name .pen{opacity:.6}
+@media (hover:none){.cat-name .pen{opacity:.45}}
 
 /* modal */
 .modal{display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:1000;justify-content:center;align-items:center;padding:16px}
@@ -344,7 +349,7 @@ canvas{display:block}
       </div>
 
       <div class="card">
-        <h2>🏷️ 自定义分类 <span class="sub">点圆点改颜色</span></h2>
+        <h2>🏷️ 自定义分类 <span class="sub">点圆点改颜色 · 点名字改名</span></h2>
         <div id="categoryDisplay"></div>
         <div class="form-group" style="margin-top:6px;">
           <label for="newCategoryName">添加新分类</label>
@@ -525,6 +530,22 @@ canvas{display:block}
   </div>
 </div>
 
+<!-- 分类改名 -->
+<div id="renameModal" class="modal">
+  <div class="modal-content small">
+    <div class="modal-header" style="font-size:1.1em">✏️ 修改分类名称</div>
+    <div class="form-group">
+      <label for="renameInput" id="renameLabel"></label>
+      <input type="text" id="renameInput" maxlength="20" autocomplete="off">
+      <div class="hint" id="renameHint"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="renameCancel">取消</button>
+      <button class="btn-primary" id="renameOk">保存</button>
+    </div>
+  </div>
+</div>
+
 <!-- 确认框 -->
 <div id="confirmModal" class="modal">
   <div class="modal-content small">
@@ -548,7 +569,7 @@ const LS = {
     if (DATA_KEYS.includes(k) && !suppressDirty) markDirty();
   }
 };
-const DATA_KEYS = ['expenseRecords', 'customCategories', 'categoryColors', 'customKeywords', 'appSettings'];
+const DATA_KEYS = ['expenseRecords', 'customCategories', 'categoryColors', 'customKeywords', 'appSettings', 'categoryOrigin'];
 let suppressDirty = false;
 function metaGet(k) { try { return Number(localStorage.getItem(k)) || 0; } catch (e) { return 0; } }
 function metaSet(k, v) { try { localStorage.setItem(k, String(v)); } catch (e) {} }
@@ -569,13 +590,14 @@ customCategories.income = customCategories.income || [];
 customCategories.expense = customCategories.expense || [];
 let categoryColors = LS.get('categoryColors', {}) || {};
 let customKeywords = LS.get('customKeywords', {}) || {};
+let categoryOrigin = LS.get('categoryOrigin', {}) || {}; // 改过名的分类 → 原来的名字（用来继续使用内置识别关键词）
 // ============================================================
 // 想改默认设置（新用户第一次打开时看到的样子），改下面这几行就行
 // ============================================================
 const DEFAULT_APP = {
   name: '小账本',                 // App 名字
   emoji: '💰',                    // 标题前面的小图标
-  subtitle: '完全本地运行的记账工具：一句话记账、分类、图表分析。数据只保存在你自己的设备上。',  // 标题下面的一句话
+  subtitle: '今天也要开心鸭 ; )',  // 标题下面的一句话
   showSubtitle: true,             // 是否显示这句话
   pillMode: 'status',             // 小标签：'status' 显示保存状态 / 'custom' 显示自定义文字 / 'hidden' 不显示
   pillText: '今天也要开心鸭 ; )',  // 小标签选 'custom' 时显示的文字
@@ -719,6 +741,7 @@ function init() {
   setupAnalytics();
   setupDelegation();
   setupSearch();
+  setupRename();
   setupFileSync();
   updateCategorySelect();
   refreshAll();
@@ -771,6 +794,8 @@ function setupDelegation() {
       }
       return;
     }
+    const catName = e.target.closest('.cat-name');
+    if (catName) { openRename(catName.dataset.type, catName.dataset.category); return; }
     const delCat = e.target.closest('.delete-category');
     if (delCat) {
       const { type, category } = delCat.dataset;
@@ -816,13 +841,83 @@ function updateCategorySelect(selected) {
 
 function renderCategoryDisplay() {
   const block = (type, title) => `<div class="cat-group-title">${title}</div><div class="category-list">${
-    customCategories[type].map(cat => `<span class="category-tag"><input type="color" class="cat-color" data-category="${escapeHtml(cat)}" value="${getCategoryColor(cat)}" title="点击修改「${escapeHtml(cat)}」的颜色">${escapeHtml(cat)}<button class="delete-category" data-type="${type}" data-category="${escapeHtml(cat)}" title="删除分类">×</button></span>`).join('')
+    customCategories[type].map(cat => `<span class="category-tag"><input type="color" class="cat-color" data-category="${escapeHtml(cat)}" value="${getCategoryColor(cat)}" title="点击修改「${escapeHtml(cat)}」的颜色"><button class="cat-name" data-type="${type}" data-category="${escapeHtml(cat)}" title="点击修改名称">${escapeHtml(cat)}<span class="pen">✏️</span></button><button class="delete-category" data-type="${type}" data-category="${escapeHtml(cat)}" title="删除分类">×</button></span>`).join('')
   }</div>`;
   const kws = Object.entries(customKeywords).flatMap(([cat, list]) => list.map(k => [cat, k]));
   const kwBlock = kws.length ? `<div class="cat-group-title">🔑 自己加的识别关键词</div><div class="category-list">${
     kws.map(([cat, k]) => `<span class="category-tag kw-tag"><i class="dot" style="background:${getCategoryColor(cat)}"></i>${escapeHtml(k)} → ${escapeHtml(cat)}<button class="delete-kw delete-category-like" data-category="${escapeHtml(cat)}" data-kw="${escapeHtml(k)}" title="删除这个关键词" style="background:none;border:none;color:var(--ink3);cursor:pointer;font-size:1.1em;padding:0 2px">×</button></span>`).join('')
   }</div>` : '';
   $('categoryDisplay').innerHTML = block('expense', '支出分类') + block('income', '收入分类') + kwBlock;
+}
+
+// ================= 分类改名 =================
+let renaming = null;
+function openRename(type, cat) {
+  renaming = { type, cat };
+  const n = records.filter(r => r.type === type && r.category === cat).length;
+  $('renameLabel').textContent = `「${cat}」改成：`;
+  $('renameInput').value = cat;
+  $('renameHint').textContent = n ? `现有的 ${n} 条${type === 'income' ? '收入' : '支出'}记录会一起改过去，颜色和识别关键词也会保留。` : '这个分类还没有记录。颜色和识别关键词会保留。';
+  $('renameModal').classList.add('active');
+  setTimeout(() => { $('renameInput').focus(); $('renameInput').select(); }, 50);
+}
+function closeRename() { $('renameModal').classList.remove('active'); renaming = null; }
+async function doRename() {
+  if (!renaming) return;
+  const { type, cat: oldName } = renaming;
+  const newName = $('renameInput').value.replace(/\s+/g, ' ').trim().slice(0, 20);
+  if (!newName) { toast('名称不能为空'); $('renameInput').focus(); return; }
+  if (newName === oldName) { closeRename(); return; }
+  const list = customCategories[type];
+  const idx = list.indexOf(oldName);
+  if (idx < 0) { closeRename(); return; }
+  const affected = records.filter(r => r.type === type && r.category === oldName);
+  const merging = list.includes(newName);
+  if (merging) {
+    $('renameModal').classList.remove('active');
+    const ok = await askConfirm(`「${newName}」这个分类已经有了。要把「${oldName}」合并进去吗？${affected.length ? `${affected.length} 条记录会改到「${newName}」。` : ''}`, '合并');
+    if (!ok) { $('renameModal').classList.add('active'); $('renameInput').focus(); return; }
+  }
+  // 1. 分类列表
+  if (merging) list.splice(idx, 1); else list[idx] = newName;
+  const stillUsed = customCategories.income.includes(oldName) || customCategories.expense.includes(oldName) || records.some(r => r.category === oldName && r.type !== type);
+  // 2. 记录
+  affected.forEach(r => { r.category = newName; });
+  // 3. 颜色：新名字沿用旧颜色（合并时保留目标分类原来的颜色）
+  if (!categoryColors[newName] || !merging) categoryColors[newName] = categoryColors[oldName] || getCategoryColor(oldName);
+  if (!stillUsed) delete categoryColors[oldName];
+  // 4. 识别关键词
+  if (customKeywords[oldName]) {
+    const merged = [...new Set([...(customKeywords[newName] || []), ...customKeywords[oldName]])];
+    customKeywords[newName] = merged;
+    if (!stillUsed) delete customKeywords[oldName];
+  }
+  // 4b. 记住原来的名字，内置的识别关键词（比如「食品」的咖啡、饭）和 maka 识别继续有效
+  const origin = categoryOrigin[oldName] || oldName;
+  if (!merging || !(keywordMap[newName] || categoryOrigin[newName])) {
+    if (keywordMap[origin] || /maka/i.test(origin)) categoryOrigin[newName] = origin;
+  }
+  if (!stillUsed) delete categoryOrigin[oldName];
+  if (keywordMap[newName] && categoryOrigin[newName] === newName) delete categoryOrigin[newName];
+  // 5. 界面上正在用的筛选 / 选中
+  if (AN.cats.has(oldName) && !stillUsed) { AN.cats.delete(oldName); AN.cats.add(newName); }
+  if (RS.cat === oldName) RS.cat = newName;
+  const formSel = $('categorySelect').value;
+  saveRecords(); saveCustomCategories(); LS.set('categoryColors', categoryColors); LS.set('customKeywords', customKeywords); LS.set('categoryOrigin', categoryOrigin);
+  closeRename();
+  suppressDirty = true; ensureCategoryColors(); suppressDirty = false;
+  updateCategorySelect(formSel === oldName && currentType === type ? newName : formSel);
+  const keepFilter = RS.cat === newName;
+  updateSearchCatOptions();
+  if (keepFilter) { $('searchCat').value = newName; RS.cat = newName; }
+  refreshAll();
+  toast(`✅ 「${oldName}」${merging ? '已合并到' : '已改名为'}「${newName}」${affected.length ? `，${affected.length} 条记录已同步` : ''}`);
+}
+function setupRename() {
+  $('renameOk').addEventListener('click', doRename);
+  $('renameCancel').addEventListener('click', closeRename);
+  $('renameModal').addEventListener('click', e => { if (e.target === $('renameModal')) closeRename(); });
+  $('renameInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) doRename(); });
 }
 
 function addCategory() {
@@ -865,14 +960,14 @@ function parseQuick(text) {
   const list = customCategories[type] || [];
 
   let category = null, best = 0;
-  const makaCat = list.find(c => c.toLowerCase().includes('maka'));
+  const makaCat = list.find(c => c.toLowerCase().includes('maka')) || list.find(c => (categoryOrigin[c] || '').toLowerCase().includes('maka'));
   if (makaCat && lower.includes('maka')) { category = makaCat; best = 99; }
   if (!category) {
     list.forEach(cat => {
       const plain = cat.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
       let score = plain && lower.includes(plain) ? 2 : 0;
       (customKeywords[cat] || []).forEach(kw => { if (nt.includes(norm(kw))) score += 3; });
-      (keywordMap[cat] || []).forEach(kw => { if (lower.includes(kw.toLowerCase())) score += 1 + kw.length / 100; });
+      (keywordMap[cat] || keywordMap[categoryOrigin[cat]] || []).forEach(kw => { if (lower.includes(kw.toLowerCase())) score += 1 + kw.length / 100; });
       if (score > best) { best = score; category = cat; }
     });
   }
@@ -1200,6 +1295,7 @@ function setupEditModal() {
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
     if ($('confirmModal').classList.contains('active')) $('confirmCancel').click();
+    else if ($('renameModal').classList.contains('active')) closeRename();
     else if ($('editModal').classList.contains('active')) closeModal();
   });
 }
@@ -1291,7 +1387,7 @@ function exportCSV() {
   downloadFile('﻿' + csv, `expense_${todayStr()}.csv`, 'text/csv');
 }
 function buildBackup() {
-  return { app: 'expense-tracker', version: 3, savedAt: metaGet('lastModifiedAt') || Date.now(), exportedAt: new Date().toISOString(), records, customCategories, categoryColors, customKeywords, appSettings };
+  return { app: 'expense-tracker', version: 3, savedAt: metaGet('lastModifiedAt') || Date.now(), exportedAt: new Date().toISOString(), records, customCategories, categoryColors, customKeywords, appSettings, categoryOrigin };
 }
 function exportJSON() {
   downloadFile(JSON.stringify(buildBackup(), null, 2), `expense_${todayStr()}.json`, 'application/json');
@@ -1319,6 +1415,7 @@ function mergeData(data) {
   });
   if (data.customCategories) ['income', 'expense'].forEach(t => (data.customCategories[t] || []).forEach(c => { if (!customCategories[t].includes(c)) customCategories[t].push(c); }));
   if (data.categoryColors) categoryColors = { ...categoryColors, ...data.categoryColors };
+  if (data.categoryOrigin) { categoryOrigin = { ...data.categoryOrigin, ...categoryOrigin }; LS.set('categoryOrigin', categoryOrigin); }
   if (data.customKeywords) Object.entries(data.customKeywords).forEach(([c, list]) => (list || []).forEach(k => { if (!(customKeywords[c] || []).includes(k)) { (customKeywords[c] = customKeywords[c] || []).push(k); } }));
   saveRecords(); saveCustomCategories(); LS.set('categoryColors', categoryColors); LS.set('customKeywords', customKeywords);
   afterDataChange();
@@ -1333,6 +1430,7 @@ function replaceData(data, at) {
   if (data.categoryColors) categoryColors = { ...data.categoryColors };
   customKeywords = data.customKeywords ? JSON.parse(JSON.stringify(data.customKeywords)) : {};
   if (data.appSettings) { appSettings = { ...DEFAULT_APP, ...data.appSettings }; LS.set('appSettings', appSettings); applyAppName(); }
+  if (data.categoryOrigin) { categoryOrigin = { ...data.categoryOrigin }; LS.set('categoryOrigin', categoryOrigin); }
   saveRecords(); saveCustomCategories(); LS.set('categoryColors', categoryColors); LS.set('customKeywords', customKeywords);
   suppressDirty = false;
   metaSet('lastModifiedAt', at || Date.now());
