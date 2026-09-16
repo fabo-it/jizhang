@@ -257,7 +257,7 @@ canvas{display:block}
 <div class="container">
   <div class="header">
     <h1><span id="appEmoji">💰</span> <span id="appTitle">小账本</span></h1>
-    <p>完全本地运行 · 数据只保存在你自己的设备上</p>
+    <p id="appSubtitle">今天也要开心鸭 ; )</p>
     <button class="save-status" id="saveStatus"></button>
   </div>
   <div class="backup-banner" id="backupBanner"></div>
@@ -430,6 +430,24 @@ canvas{display:block}
         <label>标题前面的小图标</label>
         <div class="emoji-picker" id="emojiPicker"></div>
       </div>
+      <div class="form-group">
+        <label for="subtitleInput">标题下面的一句话</label>
+        <input type="text" id="subtitleInput" maxlength="40" placeholder="今天也要开心鸭 ; )" autocomplete="off">
+        <label class="check" style="margin-top:8px;font-size:.88em"><input type="checkbox" id="subtitleShow"> 在首页显示这句话</label>
+      </div>
+      <div class="form-group">
+        <label for="pillModeSelect">标题下面的小标签</label>
+        <select id="pillModeSelect">
+          <option value="status">显示保存状态（比如"未开启自动保存"）</option>
+          <option value="custom">显示我自己写的话</option>
+          <option value="hidden">不显示</option>
+        </select>
+        <input type="text" id="pillTextInput" maxlength="30" placeholder="今天也要开心鸭 ; )" autocomplete="off" style="margin-top:8px">
+        <div class="hint">自动保存需要重新授权、或者保存失败的时候，小标签还是会出来提醒你，免得数据没存上却不知道。</div>
+      </div>
+      <div class="form-group">
+        <label class="check" style="font-size:.92em"><input type="checkbox" id="backupRemindChk"> 超过 7 天没备份时，在首页提醒我</label>
+      </div>
       <div class="form-group" style="margin-bottom:0">
         <label>货币符号</label>
         <div class="emoji-picker" id="currencyPicker"></div>
@@ -551,7 +569,20 @@ customCategories.income = customCategories.income || [];
 customCategories.expense = customCategories.expense || [];
 let categoryColors = LS.get('categoryColors', {}) || {};
 let customKeywords = LS.get('customKeywords', {}) || {};
-const DEFAULT_APP = { name: '小账本', emoji: '💰', currency: '€', curPos: 'before' };
+// ============================================================
+// 想改默认设置（新用户第一次打开时看到的样子），改下面这几行就行
+// ============================================================
+const DEFAULT_APP = {
+  name: '小账本',                 // App 名字
+  emoji: '💰',                    // 标题前面的小图标
+  subtitle: '今天也要开心鸭 ; )',  // 标题下面的一句话
+  showSubtitle: true,             // 是否显示这句话
+  pillMode: 'status',             // 小标签：'status' 显示保存状态 / 'custom' 显示自定义文字 / 'hidden' 不显示
+  pillText: '今天也要开心鸭 ; )',  // 小标签选 'custom' 时显示的文字
+  backupRemind: true,             // 超过 7 天没备份时是否提醒
+  currency: '€',                  // 货币符号
+  curPos: 'before'                // 符号在数字前 'before' 或后 'after'
+};
 let appSettings = { ...DEFAULT_APP, ...(LS.get('appSettings', {}) || {}) };
 const RS = { q: '', type: '', cat: '' };
 let selectedIds = new Set();
@@ -1534,6 +1565,16 @@ function updateFileUI() {
       <div class="muted-note">如果清除了浏览器数据，重新打开这个页面后，去这里点「打开已有数据文件」，选中「${name}」就能恢复。</div>`;
   }
   updateBackupUI();
+  applyPill();
+}
+
+function applyPill() {
+  const st = $('saveStatus'); if (!st || typeof appSettings === 'undefined') return;
+  const urgent = FS.status === 'needs-permission' || FS.status === 'error';
+  st.style.display = '';
+  if (urgent) return;
+  if (appSettings.pillMode === 'hidden') st.style.display = 'none';
+  else if (appSettings.pillMode === 'custom') { st.className = 'save-status'; st.textContent = appSettings.pillText || DEFAULT_APP.pillText; }
 }
 
 function updateBackupUI() {
@@ -1542,7 +1583,7 @@ function updateBackupUI() {
   const banner = $('backupBanner');
   const base = last || metaGet('firstSeenAt') || Date.now();
   const days = Math.floor((Date.now() - base) / 86400000);
-  const show = records.length > 0 && FS.status !== 'ok' && FS.status !== 'saving' && days >= 7 && Date.now() > metaGet('backupSnoozeUntil');
+  const show = appSettings.backupRemind !== false && records.length > 0 && FS.status !== 'ok' && FS.status !== 'saving' && days >= 7 && Date.now() > metaGet('backupSnoozeUntil');
   banner.classList.toggle('show', show);
   if (!show) return;
   banner.innerHTML = `<div class="bb-text">📦 <b>${last ? `已经 ${days} 天没有备份了` : '你还没有备份过'}</b>。${records.length} 条记录现在只存在这个浏览器里，清除浏览器数据会一起删掉。</div>
@@ -2178,6 +2219,16 @@ function applyAppName() {
   $('npName').textContent = name; $('npIcon').textContent = emoji;
   if (document.activeElement !== $('appNameInput')) $('appNameInput').value = appSettings.name === DEFAULT_APP.name ? '' : appSettings.name;
   $('emojiPicker').innerHTML = EMOJI_CHOICES.map(e => `<button type="button" class="emoji-opt ${e === emoji ? 'selected' : ''}" data-emoji="${e}" aria-label="${e}">${e}</button>`).join('');
+  const sub = $('appSubtitle');
+  sub.textContent = appSettings.subtitle || DEFAULT_APP.subtitle;
+  sub.style.display = appSettings.showSubtitle === false ? 'none' : '';
+  if (document.activeElement !== $('subtitleInput')) $('subtitleInput').value = appSettings.subtitle === DEFAULT_APP.subtitle ? '' : (appSettings.subtitle || '');
+  $('subtitleShow').checked = appSettings.showSubtitle !== false;
+  $('pillModeSelect').value = ['status', 'custom', 'hidden'].includes(appSettings.pillMode) ? appSettings.pillMode : 'status';
+  $('pillTextInput').style.display = $('pillModeSelect').value === 'custom' ? '' : 'none';
+  if (document.activeElement !== $('pillTextInput')) $('pillTextInput').value = appSettings.pillText === DEFAULT_APP.pillText ? '' : (appSettings.pillText || '');
+  $('backupRemindChk').checked = appSettings.backupRemind !== false;
+  if (typeof FS !== 'undefined') { applyPill(); updateBackupUI(); }
   const sym = curSym();
   const presetHit = CURRENCY_CHOICES.some(c => c.sym === sym);
   $('currencyPicker').innerHTML = CURRENCY_CHOICES.map(c => `<button type="button" class="emoji-opt cur ${c.sym === sym ? 'selected' : ''}" data-sym="${escapeHtml(c.sym)}" data-pos="${c.pos}">${escapeHtml(c.sym)}<small>${c.label}</small></button>`).join('');
@@ -2226,6 +2277,24 @@ function setupPersonalize() {
   $('currencyInput').addEventListener('input', () => { clearTimeout(ct); ct = setTimeout(applyCustomCur, 500); });
   $('currencyInput').addEventListener('change', () => { clearTimeout(ct); applyCustomCur(); });
   $('currencyInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) $('currencyInput').blur(); });
+  let st2, pt;
+  $('subtitleInput').addEventListener('input', () => {
+    const v = $('subtitleInput').value.trim().slice(0, 40) || DEFAULT_APP.subtitle;
+    $('appSubtitle').textContent = v;
+    clearTimeout(st2); st2 = setTimeout(() => saveAppSettings({ subtitle: v }, true), 500);
+  });
+  $('subtitleInput').addEventListener('change', () => { clearTimeout(st2); saveAppSettings({ subtitle: $('subtitleInput').value.trim().slice(0, 40) || DEFAULT_APP.subtitle }, true); });
+  $('subtitleShow').addEventListener('change', () => saveAppSettings({ showSubtitle: $('subtitleShow').checked }, true));
+  $('pillModeSelect').addEventListener('change', () => {
+    saveAppSettings({ pillMode: $('pillModeSelect').value }, true);
+    if ($('pillModeSelect').value === 'custom') $('pillTextInput').focus();
+  });
+  $('pillTextInput').addEventListener('input', () => {
+    clearTimeout(pt); pt = setTimeout(() => saveAppSettings({ pillText: $('pillTextInput').value.trim().slice(0, 30) || DEFAULT_APP.pillText }, true), 400);
+  });
+  $('pillTextInput').addEventListener('change', () => { clearTimeout(pt); saveAppSettings({ pillText: $('pillTextInput').value.trim().slice(0, 30) || DEFAULT_APP.pillText }, true); });
+  [$('subtitleInput'), $('pillTextInput')].forEach(el => el.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) el.blur(); }));
+  $('backupRemindChk').addEventListener('change', () => saveAppSettings({ backupRemind: $('backupRemindChk').checked }, true));
   $('curPosSelect').addEventListener('change', () => saveAppSettings({ curPos: $('curPosSelect').value }, true));
 }
 
