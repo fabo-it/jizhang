@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>记账工具 Pro</title>
+<title>小账本</title>
 <meta name="description" content="完全本地运行的记账工具：一句话记账、分类、图表分析。数据只保存在你自己的设备上。">
 <meta name="theme-color" content="#059669">
 <link rel="manifest" href="manifest.webmanifest">
@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="记账">
+<meta name="apple-mobile-web-app-title" content="小账本">
 <style>
 :root{
   --g1:#059669; --g2:#0891b2; --accent:#10b981; --income:#10b981; --expense:#f97316;
@@ -69,6 +69,18 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);
 .record-amount.expense,.top-amt.expense{color:#ea580c}
 .record-actions{display:flex;gap:6px}
 @media (max-width:600px){.record-item{flex-wrap:wrap}.record-actions{width:100%;justify-content:flex-end}.records-list{max-height:none;overflow:visible}input,select,textarea,.batch-bar select,.batch-bar input[type=text]{font-size:16px}}
+.emoji-picker{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+.emoji-opt{width:40px;height:40px;border-radius:10px;border:2px solid var(--line);background:#fff;font-size:1.3em;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+.emoji-opt:hover{border-color:#a7f3d0}
+.emoji-opt.selected{border-color:var(--accent);background:#ecfdf5}
+.emoji-opt.cur{width:auto;min-width:40px;padding:0 10px;font-size:1em;font-weight:700;gap:4px}
+.emoji-opt.cur small{font-weight:500;color:var(--ink3);font-size:.78em}
+.name-row{display:flex;gap:8px}
+.name-row input{flex:1}
+.name-preview{display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;border-radius:12px;padding:12px 16px;margin-bottom:14px}
+.name-preview .np-icon{width:46px;height:46px;border-radius:12px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:1.6em;flex:none}
+.name-preview .np-name{font-size:1.25em;font-weight:700;word-break:break-all}
+.name-preview .np-sub{font-size:.78em;opacity:.85}
 .install-steps{font-size:.9em;color:var(--ink2);line-height:1.8;margin-top:6px}
 .install-steps b{color:var(--ink)}
 .empty-state{text-align:center;padding:40px 20px;color:var(--ink3)}
@@ -244,7 +256,7 @@ canvas{display:block}
 <body>
 <div class="container">
   <div class="header">
-    <h1>💰 记账工具 Pro</h1>
+    <h1><span id="appEmoji">💰</span> <span id="appTitle">小账本</span></h1>
     <p>完全本地运行 · 数据只保存在你自己的设备上</p>
     <button class="save-status" id="saveStatus"></button>
   </div>
@@ -313,7 +325,7 @@ canvas{display:block}
           <button class="type-btn active" data-type="expense">支出 💸</button>
         </div>
         <div class="form-group">
-          <label for="amount">金额（€）</label>
+          <label for="amount">金额（<span class="cur-sym">€</span>）</label>
           <input type="number" id="amount" placeholder="0.00" min="0" step="0.01">
         </div>
         <div class="form-group">
@@ -404,6 +416,34 @@ canvas{display:block}
 
   <!-- 设置 -->
   <div id="settings" class="tab-content">
+    <div class="card" style="margin-bottom:20px" id="personalizeCard">
+      <h2>✏️ 个性化</h2>
+      <div class="name-preview"><div class="np-icon" id="npIcon">💰</div><div><div class="np-name" id="npName">小账本</div><div class="np-sub">页面顶部和浏览器标签页上会显示这个名字</div></div></div>
+      <div class="form-group">
+        <label for="appNameInput">名字（最多 20 个字）</label>
+        <div class="name-row">
+          <input type="text" id="appNameInput" maxlength="20" placeholder="小账本" autocomplete="off">
+          <button class="btn-secondary" id="appNameReset" title="恢复默认名字和图标">恢复默认</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>标题前面的小图标</label>
+        <div class="emoji-picker" id="emojiPicker"></div>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>货币符号</label>
+        <div class="emoji-picker" id="currencyPicker"></div>
+        <div class="name-row" style="margin-top:8px">
+          <input type="text" id="currencyInput" placeholder="或者自己输入任意符号 / emoji，比如 CHF、🍪" autocomplete="off">
+          <select id="curPosSelect" style="width:auto;flex:none">
+            <option value="before">放在数字前面</option>
+            <option value="after">放在数字后面</option>
+          </select>
+        </div>
+        <div class="hint" id="currencyPreview"></div>
+      </div>
+      <div class="muted-note" id="homeNameNote"></div>
+    </div>
     <div class="card" style="margin-bottom:20px" id="installCard">
       <h2>📱 安装到手机 / 电脑</h2>
       <div id="installBody"></div>
@@ -433,7 +473,7 @@ canvas{display:block}
       <select id="editType"><option value="expense">支出</option><option value="income">收入</option></select>
     </div>
     <div class="form-group">
-      <label for="editAmount">金额（€）</label>
+      <label for="editAmount">金额（<span class="cur-sym">€</span>）</label>
       <input type="number" id="editAmount" min="0" step="0.01">
     </div>
     <div class="form-group">
@@ -490,7 +530,7 @@ const LS = {
     if (DATA_KEYS.includes(k) && !suppressDirty) markDirty();
   }
 };
-const DATA_KEYS = ['expenseRecords', 'customCategories', 'categoryColors', 'customKeywords'];
+const DATA_KEYS = ['expenseRecords', 'customCategories', 'categoryColors', 'customKeywords', 'appSettings'];
 let suppressDirty = false;
 function metaGet(k) { try { return Number(localStorage.getItem(k)) || 0; } catch (e) { return 0; } }
 function metaSet(k, v) { try { localStorage.setItem(k, String(v)); } catch (e) {} }
@@ -511,6 +551,8 @@ customCategories.income = customCategories.income || [];
 customCategories.expense = customCategories.expense || [];
 let categoryColors = LS.get('categoryColors', {}) || {};
 let customKeywords = LS.get('customKeywords', {}) || {};
+const DEFAULT_APP = { name: '小账本', emoji: '💰', currency: '€', curPos: 'before' };
+let appSettings = { ...DEFAULT_APP, ...(LS.get('appSettings', {}) || {}) };
 const RS = { q: '', type: '', cat: '' };
 let selectedIds = new Set();
 let visibleRecords = [];
@@ -543,15 +585,23 @@ const INCOME_KW = ['收到', '收入', '获得', '奖金', '工资', '薪水', '
 
 // ================= 工具 =================
 const $ = id => document.getElementById(id);
+function escapeRe(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 function escapeHtml(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
-const moneyFmt = new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'EUR' });
-function fmt(n) { return moneyFmt.format(n || 0); }
+const numFmt = new Intl.NumberFormat('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+function curSym() { return appSettings.currency || '€'; }
+function withCur(numText, negative) {
+  const sym = curSym(), sign = negative ? '-' : '';
+  return appSettings.curPos === 'after' ? `${sign}${numText} ${sym}` : `${sign}${sym}${numText}`;
+}
+function fmt(n) { n = Number(n) || 0; return withCur(numFmt.format(Math.abs(n)), n < 0); }
 function fmtShort(n) {
   const a = Math.abs(n);
-  if (a >= 10000) return '€' + Math.round(n / 1000) + 'k';
-  if (a >= 1000) return '€' + (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
-  if (a >= 10 || Number.isInteger(n)) return '€' + Math.round(n);
-  return '€' + n.toFixed(1);
+  let t;
+  if (a >= 10000) t = Math.round(a / 1000) + 'k';
+  else if (a >= 1000) t = (a / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+  else if (a >= 10 || Number.isInteger(a)) t = String(Math.round(a));
+  else t = a.toFixed(1);
+  return withCur(t, n < 0);
 }
 function ymd(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 function parseYmd(s) { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }
@@ -760,7 +810,9 @@ function addCategory() {
 function parseQuick(text) {
   const t = text.trim();
   if (!t) return { error: '请先输入一句话' };
-  const m = t.match(/€\s*(\d+(?:[.,]\d{1,2})?)/) || t.match(/(\d+(?:[.,]\d{1,2})?)\s*(?:块钱|块|元|欧元|欧|eur|€)/i);
+  const symRe = escapeRe(curSym());
+  const m = t.match(new RegExp(`(?:€|¥|￥|\\$|£|${symRe})\\s*(\\d+(?:[.,]\\d{1,2})?)`)) ||
+    t.match(new RegExp(`(\\d+(?:[.,]\\d{1,2})?)\\s*(?:块钱|块|元|人民币|rmb|欧元|欧|eur|€|¥|￥|美元|刀|\\$|英镑|£|${symRe})`, 'i'));
   let numStr;
   if (m) numStr = m[1];
   else {
@@ -800,7 +852,7 @@ function parseQuick(text) {
   const dateWords = [['大前天', -3], ['前天', -2], ['昨天', -1], ['昨晚', -1], ['今天', 0], ['今晚', 0], ['yesterday', -1], ['hier', -1]];
   for (const [w, off] of dateWords) { if (lower.includes(w)) { date = ymd(addDays(new Date(), off)); break; } }
 
-  let desc = t.replace(numStr, '').replace(/(块钱|块|元|欧元|欧|eur\b|€)/gi, '');
+  let desc = t.replace(numStr, '').replace(new RegExp(`(块钱|块|元|人民币|rmb|欧元|欧|eur\\b|€|¥|￥|美元|\\$|英镑|£|${escapeRe(curSym())})`, 'gi'), '');
   dateWords.forEach(([w]) => { desc = desc.replace(new RegExp(w, 'gi'), ''); });
   desc = desc.replace(/\s+/g, ' ').replace(/^[\s,，。.、:：;；\-]+|[\s,，。.、:：;；\-]+$/g, '').trim();
 
@@ -965,7 +1017,7 @@ function toggleSelect(id, shift) {
 }
 function rememberableKw() {
   const q = RS.q.trim();
-  if (!q || q.length > 30 || /^[\d\s.,€\-\/]+$/.test(q)) return '';
+  if (!q || q.length > 30 || /^[\d\s.,€¥￥$£\-\/]+$/.test(q)) return '';
   return q;
 }
 function updateSelectionUI() {
@@ -1203,12 +1255,12 @@ function setupSettings() {
 }
 function exportCSV() {
   const q = s => `"${String(s).replace(/"/g, '""')}"`;
-  const csv = [['日期', '类型', '分类', '金额(€)', '描述'].join(','),
+  const csv = [['日期', '类型', '分类', `金额(${curSym()})`, '描述'].join(','),
     ...sortedRecords().map(r => [r.date, r.type === 'income' ? '收入' : '支出', q(r.category), r.amount, q(r.description)].join(','))].join('\n');
   downloadFile('﻿' + csv, `expense_${todayStr()}.csv`, 'text/csv');
 }
 function buildBackup() {
-  return { app: 'expense-tracker', version: 3, savedAt: metaGet('lastModifiedAt') || Date.now(), exportedAt: new Date().toISOString(), records, customCategories, categoryColors, customKeywords };
+  return { app: 'expense-tracker', version: 3, savedAt: metaGet('lastModifiedAt') || Date.now(), exportedAt: new Date().toISOString(), records, customCategories, categoryColors, customKeywords, appSettings };
 }
 function exportJSON() {
   downloadFile(JSON.stringify(buildBackup(), null, 2), `expense_${todayStr()}.json`, 'application/json');
@@ -1249,6 +1301,7 @@ function replaceData(data, at) {
   if (data.customCategories) customCategories = { income: [...(data.customCategories.income || [])], expense: [...(data.customCategories.expense || [])] };
   if (data.categoryColors) categoryColors = { ...data.categoryColors };
   customKeywords = data.customKeywords ? JSON.parse(JSON.stringify(data.customKeywords)) : {};
+  if (data.appSettings) { appSettings = { ...DEFAULT_APP, ...data.appSettings }; LS.set('appSettings', appSettings); applyAppName(); }
   saveRecords(); saveCustomCategories(); LS.set('categoryColors', categoryColors); LS.set('customKeywords', customKeywords);
   suppressDirty = false;
   metaSet('lastModifiedAt', at || Date.now());
@@ -2108,6 +2161,76 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
 }
 if (navigator.storage && navigator.storage.persist) { navigator.storage.persist().catch(() => {}); }
 
+// ================= 自定义 App 名字 =================
+const CURRENCY_CHOICES = [
+  { sym: '€', label: '欧元', pos: 'before' }, { sym: '¥', label: '人民币', pos: 'before' },
+  { sym: '$', label: '美元', pos: 'before' }, { sym: '£', label: '英镑', pos: 'before' },
+  { sym: 'HK$', label: '港币', pos: 'before' }, { sym: 'CHF', label: '瑞郎', pos: 'after' }
+];
+const EMOJI_CHOICES = ['💰', '📒', '🐷', '🌱', '💶', '🧾', '🍀', '✨', '🐱', '🌈', '🍊', '💎'];
+function cleanName(v) { return String(v || '').replace(/\s+/g, ' ').trim().slice(0, 20); }
+function applyAppName() {
+  const name = appSettings.name || DEFAULT_APP.name, emoji = appSettings.emoji || DEFAULT_APP.emoji;
+  $('appTitle').textContent = name;
+  $('appEmoji').textContent = emoji;
+  document.title = name;
+  const t = document.querySelector('meta[name="apple-mobile-web-app-title"]'); if (t) t.setAttribute('content', name);
+  $('npName').textContent = name; $('npIcon').textContent = emoji;
+  if (document.activeElement !== $('appNameInput')) $('appNameInput').value = appSettings.name === DEFAULT_APP.name ? '' : appSettings.name;
+  $('emojiPicker').innerHTML = EMOJI_CHOICES.map(e => `<button type="button" class="emoji-opt ${e === emoji ? 'selected' : ''}" data-emoji="${e}" aria-label="${e}">${e}</button>`).join('');
+  const sym = curSym();
+  const presetHit = CURRENCY_CHOICES.some(c => c.sym === sym);
+  $('currencyPicker').innerHTML = CURRENCY_CHOICES.map(c => `<button type="button" class="emoji-opt cur ${c.sym === sym ? 'selected' : ''}" data-sym="${escapeHtml(c.sym)}" data-pos="${c.pos}">${escapeHtml(c.sym)}<small>${c.label}</small></button>`).join('');
+  if (document.activeElement !== $('currencyInput')) $('currencyInput').value = presetHit ? '' : sym;
+  $('curPosSelect').value = appSettings.curPos === 'after' ? 'after' : 'before';
+  $('currencyPreview').textContent = `显示效果：${fmt(1234.5)} · ${fmt(-8)}。只改显示的符号，不会换算已有金额。`;
+  document.querySelectorAll('.cur-sym').forEach(el => { el.textContent = sym; });
+  $('homeNameNote').innerHTML = isStandalone()
+    ? '已经装到主屏幕的话，主屏幕图标下面的名字不会跟着变：删掉图标，用新名字重新「添加到主屏幕」就行（记录不会丢）。'
+    : `添加到主屏幕时，名字会默认填成「${escapeHtml(name)}」，在弹出的确认框里也可以再改。`;
+}
+function saveAppSettings(patch, quiet) {
+  const curChanged = ('currency' in patch && patch.currency !== appSettings.currency) || ('curPos' in patch && patch.curPos !== appSettings.curPos);
+  appSettings = { ...appSettings, ...patch };
+  LS.set('appSettings', appSettings);
+  applyAppName();
+  if (curChanged && typeof refreshAll === 'function') refreshAll();
+  if (!quiet) toast(`✅ 已改名为「${appSettings.name}」`);
+}
+function setupPersonalize() {
+  let t;
+  $('appNameInput').addEventListener('input', () => {
+    const v = cleanName($('appNameInput').value) || DEFAULT_APP.name;
+    // 实时预览，停止输入后再保存
+    $('npName').textContent = v; $('appTitle').textContent = v; document.title = v;
+    clearTimeout(t); t = setTimeout(() => saveAppSettings({ name: v }, true), 500);
+  });
+  $('appNameInput').addEventListener('change', () => { clearTimeout(t); saveAppSettings({ name: cleanName($('appNameInput').value) || DEFAULT_APP.name }); });
+  $('appNameInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) $('appNameInput').blur(); });
+  $('emojiPicker').addEventListener('click', e => {
+    const b = e.target.closest('.emoji-opt'); if (!b) return;
+    saveAppSettings({ emoji: b.dataset.emoji }, true);
+  });
+  $('appNameReset').addEventListener('click', () => { $('appNameInput').value = ''; saveAppSettings({ name: DEFAULT_APP.name, emoji: DEFAULT_APP.emoji }, true); toast('已恢复默认名字和图标'); });
+  $('currencyPicker').addEventListener('click', e => {
+    const b = e.target.closest('.emoji-opt'); if (!b) return;
+    $('currencyInput').value = '';
+    saveAppSettings({ currency: b.dataset.sym, curPos: b.dataset.pos }, true);
+    toast(`货币符号改成了 ${b.dataset.sym}`);
+  });
+  let ct;
+  const applyCustomCur = () => {
+    const v = Array.from($('currencyInput').value.trim()).slice(0, 6).join('');
+    if (v) saveAppSettings({ currency: v }, true);
+  };
+  $('currencyInput').addEventListener('input', () => { clearTimeout(ct); ct = setTimeout(applyCustomCur, 500); });
+  $('currencyInput').addEventListener('change', () => { clearTimeout(ct); applyCustomCur(); });
+  $('currencyInput').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing && e.keyCode !== 229) $('currencyInput').blur(); });
+  $('curPosSelect').addEventListener('change', () => saveAppSettings({ curPos: $('curPosSelect').value }, true));
+}
+
+setupPersonalize();
+applyAppName();
 init();
 renderInstallCard();
 </script>
